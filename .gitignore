@@ -1,0 +1,8 @@
+# Sensible Dateien
+salt.bin
+passwoerter.enc
+
+# Python
+__pycache__/
+venv/
+*.pyc
