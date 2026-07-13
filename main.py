@@ -9,8 +9,9 @@ from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
 
 
 class PasswortManager:
-    def __init__(self, datenbank_pfad="passwoerter.enc"):
+    def __init__(self, datenbank_pfad="passwoerter.enc", salt_pfad="salt.bin"):
         self.datenbank_pfad = datenbank_pfad
+        self.salt_pfad = salt_pfad
         self.schluessel = None
         self.eintraege = {}
 
@@ -95,6 +96,36 @@ class PasswortManager:
         """Zeigt einen Eintrag an."""
         return self.eintraege.get(name, None)
 
+    def passwort_loeschen(self, name: str) -> bool:
+        """Löscht einen Eintrag."""
+        if name in self.eintraege:
+            del self.eintraege[name]
+            return True
+        return False
+
+    def passwort_bearbeiten(self, name: str, neuer_name: str = None, passwort: str = None, 
+                           benutzername: str = None, url: str = None) -> bool:
+        """Bearbeitet einen bestehenden Eintrag."""
+        if name not in self.eintraege:
+            return False
+        
+        eintrag = self.eintraege[name]
+        
+        # Wenn neuer Name angegeben, Eintrag umbenennen
+        if neuer_name and neuer_name != name:
+            self.eintraege[neuer_name] = self.eintraege.pop(name)
+            eintrag = self.eintraege[neuer_name]
+        
+        # Felder aktualisieren (nur wenn angegeben)
+        if passwort is not None:
+            eintrag['passwort'] = passwort
+        if benutzername is not None:
+            eintrag['benutzername'] = benutzername
+        if url is not None:
+            eintrag['url'] = url
+        
+        return True
+
     def alle_anzeigen(self):
         """Listet alle gespeicherten Namen auf."""
         return list(self.eintraege.keys())
@@ -109,30 +140,25 @@ class PasswortManager:
 def main():
     pm = PasswortManager()
     
-    print("=" * 40)
-    print("  Passwort-Manager")
-    print("=" * 40)
+    print("=" * 50)
+    print("  🔐 Passwort-Manager v2.0")
+    print("=" * 50)
     
     # Prüfen ob Datenbank existiert
     if os.path.exists(pm.datenbank_pfad):
         print("\nDatenbank gefunden. Master-Passwort eingeben:")
         passwort = getpass.getpass("> ")
         
-        # Salt aus Datei extrahieren (erste 16 Bytes)
-        with open(pm.datenbank_pfad, 'rb') as f:
-            daten = f.read()
-        
-        # Salt ist nicht direkt in der Datei, wir müssen anders vorgehen
-        # Für diese Version: wir speichern den Salt separat
-        if os.path.exists('salt.bin'):
-            with open('salt.bin', 'rb') as f:
+        if os.path.exists(pm.salt_pfad):
+            with open(pm.salt_pfad, 'rb') as f:
                 salt = f.read()
             pm.master_passwort_pruefen(passwort, salt)
             if not pm.laden():
-                print("FALSCHE PASSWORT!")
+                print("❌ FALSCHE PASSWORT!")
                 return
+            print("✅ Entschlüsselt!")
         else:
-            print("Fehler: Salt-Datei fehlt!")
+            print("❌ Fehler: Salt-Datei fehlt!")
             return
     else:
         print("\nNeue Datenbank erstellen. Master-Passwort wählen:")
@@ -140,29 +166,38 @@ def main():
         passwort2 = getpass.getpass("Wiederholen: ")
         
         if passwort != passwort2:
-            print("Passwörter stimmen nicht überein!")
+            print("❌ Passwörter stimmen nicht überein!")
             return
         
         salt = pm.master_passwort_setzen(passwort)
-        with open('salt.bin', 'wb') as f:
+        with open(pm.salt_pfad, 'wb') as f:
             f.write(salt)
         pm.speichern()
-        print("Datenbank erstellt!")
+        print("✅ Datenbank erstellt!")
 
     # Hauptmenü
     while True:
-        print("\n" + "=" * 40)
-        print("  [1] Passwort hinzufügen")
-        print("  [2] Passwort anzeigen")
-        print("  [3] Alle Einträge anzeigen")
-        print("  [4] Passwort generieren")
-        print("  [5] Beenden & speichern")
-        print("=" * 40)
+        print("\n" + "=" * 50)
+        print("  [1] ➕ Passwort hinzufügen")
+        print("  [2] 👁  Passwort anzeigen")
+        print("  [3] 📋 Alle Einträge anzeigen")
+        print("  [4] ✏️  Eintrag bearbeiten")
+        print("  [5] 🗑️  Eintrag löschen")
+        print("  [6] 🔑 Passwort generieren")
+        print("  [7] 💾 Beenden & speichern")
+        print("=" * 50)
         
         wahl = input("Wahl: ").strip()
         
         if wahl == "1":
             name = input("Name (z.B. 'Google'): ").strip()
+            if not name:
+                print("❌ Name darf nicht leer sein!")
+                continue
+            if name in pm.eintraege:
+                print("❌ Eintrag existiert bereits! Nutze 'Bearbeiten'.")
+                continue
+                
             benutzer = input("Benutzername: ").strip()
             url = input("URL (optional): ").strip()
             
@@ -173,41 +208,93 @@ def main():
             if pw_wahl == "2":
                 laenge = int(input("Länge (Standard 20): ") or "20")
                 passwort = pm.passwort_generieren(laenge)
-                print(f"Generiert: {passwort}")
+                print(f"🔑 Generiert: {passwort}")
             else:
                 passwort = getpass.getpass("Passwort: ")
             
             pm.passwort_hinzufuegen(name, passwort, benutzer, url)
-            print("Gespeichert!")
+            print("✅ Gespeichert!")
             
         elif wahl == "2":
             name = input("Name: ").strip()
             eintrag = pm.passwort_anzeigen(name)
             if eintrag:
-                print(f"\n  Name: {name}")
-                print(f"  Benutzer: {eintrag['benutzername']}")
-                print(f"  Passwort: {eintrag['passwort']}")
-                print(f"  URL: {eintrag['url']}")
+                print(f"\n  📛 Name: {name}")
+                print(f"  👤 Benutzer: {eintrag['benutzername'] or '(leer)'}")
+                print(f"  🔑 Passwort: {eintrag['passwort']}")
+                print(f"  🌐 URL: {eintrag['url'] or '(leer)'}")
             else:
-                print("Eintrag nicht gefunden!")
+                print("❌ Eintrag nicht gefunden!")
                 
         elif wahl == "3":
             eintraege = pm.alle_anzeigen()
             if eintraege:
-                print("\nGespeicherte Einträge:")
-                for e in eintraege:
-                    print(f"  - {e}")
+                print("\n📋 Gespeicherte Einträge:")
+                for i, e in enumerate(eintraege, 1):
+                    print(f"  {i}. {e}")
             else:
-                print("Keine Einträge vorhanden.")
+                print("📭 Keine Einträge vorhanden.")
                 
         elif wahl == "4":
-            laenge = int(input("Länge (Standard 20): ") or "20")
-            print(f"Generiertes Passwort: {pm.passwort_generieren(laenge)}")
+            name = input("Name des zu bearbeitenden Eintrags: ").strip()
+            if name not in pm.eintraege:
+                print("❌ Eintrag nicht gefunden!")
+                continue
             
+            print("\nAktuelle Werte (Enter drücken um beizubehalten):")
+            eintrag = pm.eintraege[name]
+            
+            neuer_name = input(f"Neuer Name [{name}]: ").strip() or None
+            neuer_benutzer = input(f"Neuer Benutzername [{eintrag['benutzername']}]: ").strip()
+            neuer_benutzer = neuer_benutzer if neuer_benutzer else None
+            
+            neuer_url = input(f"Neue URL [{eintrag['url']}]: ").strip()
+            neuer_url = neuer_url if neuer_url else None
+            
+            print("\n[1] Aktuelles Passwort behalten")
+            print("[2] Neues Passwort eingeben")
+            print("[3] Passwort generieren")
+            pw_wahl = input("Wahl: ").strip()
+            
+            neues_passwort = None
+            if pw_wahl == "2":
+                neues_passwort = getpass.getpass("Neues Passwort: ")
+            elif pw_wahl == "3":
+                laenge = int(input("Länge (Standard 20): ") or "20")
+                neues_passwort = pm.passwort_generieren(laenge)
+                print(f"🔑 Generiert: {neues_passwort}")
+            
+            if pm.passwort_bearbeiten(name, neuer_name, neues_passwort, neuer_benutzer, neuer_url):
+                print("✅ Eintrag aktualisiert!")
+            else:
+                print("❌ Fehler beim Bearbeiten!")
+                
         elif wahl == "5":
+            name = input("Name des zu löschenden Eintrags: ").strip()
+            if name not in pm.eintraege:
+                print("❌ Eintrag nicht gefunden!")
+                continue
+            
+            bestaetigung = input(f"Wirklich '{name}' löschen? (ja/nein): ").strip().lower()
+            if bestaetigung == "ja":
+                if pm.passwort_loeschen(name):
+                    print("✅ Eintrag gelöscht!")
+                else:
+                    print("❌ Fehler beim Löschen!")
+            else:
+                print("❌ Abgebrochen.")
+                
+        elif wahl == "6":
+            laenge = int(input("Länge (Standard 20): ") or "20")
+            print(f"🔑 Generiertes Passwort: {pm.passwort_generieren(laenge)}")
+            
+        elif wahl == "7":
             pm.speichern()
-            print("Gespeichert. Auf Wiedersehen!")
+            print("💾 Gespeichert. Auf Wiedersehen! 👋")
             break
+            
+        else:
+            print("❌ Ungültige Eingabe!")
 
 
 if __name__ == "__main__":
