@@ -1,0 +1,9 @@
+{
+  "name": "com.phylo04.passwortmanager",
+  "description": "Passwort-Manager Native Host",
+  "path": "C:\\Users\\shaid\\passwort-manager\\run_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://jgafpjopokdnbdijmhomdjolpgekihkg/"
+  ]
+}
