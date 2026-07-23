@@ -6,3 +6,22 @@ passwoerter.enc
 __pycache__/
 venv/
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test-Dateien (falls noch welche übrig)
+test_*.py
+gui_debug*.py
+gui_simple.py
+gui_login_debug.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
